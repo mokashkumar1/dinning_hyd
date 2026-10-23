@@ -38,6 +38,8 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   const [lunchHour, setLunchHour] = useState(13); // 1:00 PM
   const [dinnerHour, setDinnerHour] = useState(20); // 8:00 PM
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+  const [analysisSource, setAnalysisSource] = useState<'sample' | 'gemini' | 'fallback'>('sample');
+  const [voiceTranscript, setVoiceTranscript] = useState<{ lang: Language; text: string } | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Subscribe to TTS state
@@ -53,6 +55,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
     setTimeout(() => {
       setSelectedScenario(scenario);
       setMedicines(scenario.medicines);
+      setAnalysisSource('sample');
       setIsScanning(false);
     }, 600);
   };
@@ -73,7 +76,9 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
       setSelectedScenario(scenario);
       setMedicines(scenario.medicines);
       setSimulatedHourOffset(0);
-      setScanMessage(response.headers.get('X-OCR-Source') === 'fallback'
+      const source = response.headers.get('X-OCR-Source') === 'fallback' ? 'fallback' : 'gemini';
+      setAnalysisSource(source);
+      setScanMessage(source === 'fallback'
         ? 'Demo guidance is shown while AI analysis is unavailable. Please verify with a clinician.'
         : 'Prescription decoded. Please verify all medicine details with a pharmacist or clinician.');
     } catch (error) {
@@ -84,6 +89,25 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
     }
   };
 
+  const buildSpokenScript = (targetLang: Language) => {
+    if (targetLang === 'ur') {
+      const medList = medicines
+        .map((m, idx) => `دوائی نمبر ${idx + 1}: ${m.name}۔ ${m.instructionsUr}`)
+        .join(' ');
+      return `شفا اے آئی نسخہ کی تفصیل: ${medList}۔ احتیاط: ${selectedScenario.criticalWarnings[0]?.ur || ''}`;
+    } else if (targetLang === 'sd') {
+      const medList = medicines
+        .map((m, idx) => `دوا نمبر ${idx + 1}: ${m.name}۔ ${m.instructionsSd}`)
+        .join(' ');
+      return `شفا اي آءِ نسخي جي رهنمائي: ${medList}۔ احتياط: ${selectedScenario.criticalWarnings[0]?.sd || ''}`;
+    }
+
+    const medList = medicines
+      .map((m, idx) => `Medication ${idx + 1}: ${m.name}. ${m.instructionsEn}`)
+      .join(' ');
+    return `ShifaAI prescription guidance: ${medList}. Warning: ${selectedScenario.criticalWarnings[0]?.en || ''}`;
+  };
+
   // Voice playback trigger
   const handlePlayVoice = (targetLang: Language) => {
     if (ttsState.isPlaying && ttsState.activeLanguage === targetLang) {
@@ -91,24 +115,8 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
       return;
     }
 
-    // Build spoken script
-    let speechText = '';
-    if (targetLang === 'ur') {
-      const medList = medicines
-        .map((m, idx) => `دوائی نمبر ${idx + 1}: ${m.name}۔ ${m.instructionsUr}`)
-        .join(' ');
-      speechText = `شفا اے آئی نسخہ کی تفصیل: مریض ${selectedScenario.patientProfile.condition}۔ ${medList}۔ احتیاط: ${selectedScenario.criticalWarnings[0]?.ur || ''}`;
-    } else if (targetLang === 'sd') {
-      const medList = medicines
-        .map((m, idx) => `دوا نمبر ${idx + 1}: ${m.name}۔ ${m.instructionsSd}`)
-        .join(' ');
-      speechText = `شفا اي آءِ نسخو: مريض جي بيماري ${selectedScenario.patientProfile.condition}۔ ${medList}۔ پرهيز: ${selectedScenario.criticalWarnings[0]?.sd || ''}`;
-    } else {
-      const medList = medicines
-        .map((m, idx) => `Medication ${idx + 1}: ${m.name}. ${m.instructionsEn}`)
-        .join(' ');
-      speechText = `ShifaAI Prescription Guide: Patient treated for ${selectedScenario.patientProfile.condition}. ${medList}. Warning: ${selectedScenario.criticalWarnings[0]?.en || ''}`;
-    }
+    const speechText = buildSpokenScript(targetLang);
+    setVoiceTranscript({ lang: targetLang, text: speechText });
 
     ttsService.speak(speechText, targetLang);
   };
@@ -180,7 +188,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
             className="min-h-[44px] rounded-lg border border-teal-300 bg-white px-3 text-xs font-bold text-teal-800 transition-colors hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60 dark:border-teal-800 dark:bg-slate-900 dark:text-teal-300 dark:hover:bg-teal-950"
           >
             <Upload className="mr-1.5 inline h-4 w-4" />
-            {isScanning ? 'Reading…' : 'Upload prescription'}
+            {isScanning ? 'Reading with AI…' : 'Upload prescription'}
           </button>
           <button
             onClick={handleSkipTime}
@@ -285,7 +293,9 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
             <div className="mt-2 p-4 rounded-xl bg-amber-50/50 dark:bg-slate-950/80 border border-amber-200/60 dark:border-slate-800 font-mono text-xs leading-relaxed text-slate-800 dark:text-slate-300 shadow-inner select-none relative">
               <div className="text-[10px] font-sans font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-1 flex items-center justify-between">
                 <span>Handwritten Medical Script (Decoded)</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">OCR Verified ✓</span>
+                <span className={`font-bold ${analysisSource === 'gemini' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-300'}`}>
+                  {analysisSource === 'gemini' ? 'AI decoded ✓' : analysisSource === 'fallback' ? 'Safe fallback guidance' : 'Clinical sample'}
+                </span>
               </div>
               <pre className="whitespace-pre-wrap font-mono text-xs leading-5 italic">
                 {selectedScenario.rawHandwrittenSnippet}
@@ -457,6 +467,23 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
                 <VolumeX className="w-3.5 h-3.5" />
                 {t.stopAudio}
               </button>
+            )}
+
+            {voiceTranscript && (
+              <div className="mt-3 rounded-xl border border-teal-200/80 bg-white/75 p-3 dark:border-teal-900 dark:bg-slate-950/50">
+                <div className="mb-1 flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">
+                  <span>Spoken transcript · {voiceTranscript.lang === 'ur' ? 'Urdu' : voiceTranscript.lang === 'sd' ? 'Sindhi' : 'English'}</span>
+                  <span>{voiceTranscript.lang === 'ur' ? 'اردو' : voiceTranscript.lang === 'sd' ? 'سنڌي' : 'EN'}</span>
+                </div>
+                <p
+                  className="voice-transcript text-sm text-slate-800 dark:text-slate-100"
+                  data-language={voiceTranscript.lang}
+                  dir={voiceTranscript.lang === 'en' ? 'ltr' : 'rtl'}
+                  lang={voiceTranscript.lang === 'sd' ? 'sd' : voiceTranscript.lang}
+                >
+                  {voiceTranscript.text}
+                </p>
+              </div>
             )}
           </div>
 

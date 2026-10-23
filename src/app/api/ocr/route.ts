@@ -60,8 +60,47 @@ function fallbackPrescription(): PrescriptionScenario {
   return samplePrescriptions[0];
 }
 
+function fallbackResponse(reason: 'missing-key' | 'capacity' | 'upstream') {
+  return Response.json(fallbackPrescription(), {
+    headers: {
+      'X-OCR-Source': 'fallback',
+      'X-OCR-Fallback-Reason': reason,
+    },
+  });
+}
+
 function isGeminiCapacityError(status: number): boolean {
   return status === 429 || status === 503;
+}
+
+function parseStructuredPrescription(text: string): PrescriptionScenario {
+  try {
+    return JSON.parse(text) as PrescriptionScenario;
+  } catch {
+    // Gemini occasionally returns literal line breaks inside a JSON string field such as
+    // rawHandwrittenSnippet. Escape only those control characters, then parse again.
+    let repaired = '';
+    let inString = false;
+    let escaped = false;
+
+    for (const character of text) {
+      if (inString && !escaped && character === '\n') {
+        repaired += '\\n';
+      } else if (inString && !escaped && character === '\r') {
+        repaired += '\\r';
+      } else if (inString && !escaped && character === '\t') {
+        repaired += '\\t';
+      } else {
+        repaired += character;
+      }
+
+      if (character === '"' && !escaped) inString = !inString;
+      escaped = character === '\\' && !escaped;
+      if (character !== '\\') escaped = false;
+    }
+
+    return JSON.parse(repaired) as PrescriptionScenario;
+  }
 }
 
 export async function POST(request: Request) {
@@ -82,7 +121,7 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return Response.json(fallbackPrescription(), { headers: { 'X-OCR-Source': 'fallback' } });
+    return fallbackResponse('missing-key');
   }
 
   try {
@@ -92,17 +131,21 @@ export async function POST(request: Request) {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // A slow upstream response should never leave the upload control spinning
+        // during a demonstration. The client receives the safe clinical preset instead.
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           contents: [{
             role: 'user',
             parts: [
               { inlineData: { mimeType: image.type, data: base64Image } },
-              { text: 'Transcribe this handwritten prescription. Return only the requested JSON. Preserve uncertainty in warnings, do not invent medicines, and include a clear emergency-care warning when handwriting or dosage is unclear.' },
+              { text: 'Transcribe this handwritten prescription. Return only the requested JSON. Keep rawHandwrittenSnippet as one compact line with semicolons, never line breaks or quotation marks. Include no more than three clearly readable medicines. Preserve uncertainty in warnings, do not invent medicines, and include a clear emergency-care warning when handwriting or dosage is unclear.' },
             ],
           }],
           generationConfig: {
             responseMimeType: 'application/json',
             responseJsonSchema: prescriptionJsonSchema,
+            maxOutputTokens: 2400,
           },
         }),
       },
@@ -110,18 +153,34 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       if (isGeminiCapacityError(response.status)) {
-        return Response.json(fallbackPrescription(), { headers: { 'X-OCR-Source': 'fallback' } });
+        return fallbackResponse('capacity');
       }
       return Response.json({ error: 'Prescription analysis is temporarily unavailable.' }, { status: 502 });
     }
 
-    const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    const payload = await response.json() as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+        finishReason?: string;
+      }>;
+    };
+    const candidate = payload.candidates?.[0];
+    const parts = candidate?.content?.parts ?? [];
+    const text = parts.find((part) => !part.thought && part.text)?.text;
     if (!text) throw new Error('Gemini returned no structured content.');
 
-    return Response.json(JSON.parse(text) as PrescriptionScenario, { headers: { 'X-OCR-Source': 'gemini' } });
-  } catch {
+    try {
+      return Response.json(parseStructuredPrescription(text), { headers: { 'X-OCR-Source': 'gemini' } });
+    } catch (error) {
+      console.error('Gemini structured output was incomplete:', {
+        finishReason: candidate?.finishReason,
+        parts: parts.map((part) => ({ thought: part.thought === true, textLength: part.text?.length ?? 0 })),
+      });
+      throw error;
+    }
+  } catch (error) {
+    console.error('Gemini prescription analysis failed:', error);
     // Network and malformed-model-response failures are handled like an outage.
-    return Response.json(fallbackPrescription(), { headers: { 'X-OCR-Source': 'fallback' } });
+    return fallbackResponse('upstream');
   }
 }

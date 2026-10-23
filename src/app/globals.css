@@ -256,9 +256,31 @@ h1, h2, h3, .font-display {
 }
 
 /* RTL Language Enhancements */
-[dir="rtl"] {
+html[lang="ur"],
+html[lang="ur"] body {
+  font-family: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Segoe UI', Tahoma, sans-serif;
+  line-height: 1.85;
+}
+
+html[lang="sd"],
+html[lang="sd"] body {
   font-family: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif;
+  line-height: 1.65;
+}
+
+[dir="rtl"] {
   letter-spacing: 0;
+}
+
+.voice-transcript {
+  font-family: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif;
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+.voice-transcript[data-language="ur"] {
+  font-family: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Segoe UI', Tahoma, sans-serif;
+  line-height: 2;
 }
 
 [dir="rtl"] .icon-flip {
