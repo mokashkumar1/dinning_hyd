@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Image from 'next/image';
 import {
   Sun,
@@ -10,9 +11,13 @@ import {
   Menu,
   X,
   PhoneCall,
+  LogIn,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { Language } from '@/types';
 import { translations } from '@/lib/i18n/translations';
+import { createClient } from '@/lib/supabase/client';
 
 interface HeaderProps {
   lang: Language;
@@ -29,6 +34,29 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const t = translations[lang];
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isCoordinator, setIsCoordinator] = useState(false);
+
+  useEffect(() => {
+    const client = createClient();
+    const refreshRole = async () => {
+      const { data: { user } } = await client.auth.getUser();
+      setIsCoordinator(user?.app_metadata.role === 'coordinator');
+    };
+    const initialLoadTimer = window.setTimeout(() => void refreshRole(), 0);
+    const { data: { subscription } } = client.auth.onAuthStateChange(() => {
+      window.setTimeout(() => void refreshRole(), 0);
+    });
+
+    return () => {
+      window.clearTimeout(initialLoadTimer);
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const signOut = async () => {
+    await createClient().auth.signOut();
+    setMobileMenuOpen(false);
+  };
 
   return (
     <header className="shifa-header sticky top-0 z-40 w-full border-b backdrop-blur-xl transition-colors">
@@ -95,6 +123,16 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Emergency</span>
             <span className="num font-black">1122</span>
           </a>
+
+          {isCoordinator ? (
+            <button onClick={() => void signOut()} className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-teal-300 px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/40 md:inline-flex" aria-label="Sign out coordinator">
+              <ShieldCheck className="h-3.5 w-3.5" /> Coordinator <LogOut className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Link href="/coordinator" className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 md:inline-flex">
+              <LogIn className="h-3.5 w-3.5" /> Coordinator
+            </Link>
+          )}
 
           {/* Trilingual Selector */}
           <div className="relative hidden items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 lg:flex">
@@ -163,6 +201,15 @@ export const Header: React.FC<HeaderProps> = ({
             <PhoneCall className="w-4 h-4 animate-pulse" />
             <span>Direct Call Emergency 1122</span>
           </a>
+          {isCoordinator ? (
+            <button onClick={() => void signOut()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30">
+              <LogOut className="h-4 w-4" /> Sign out coordinator
+            </button>
+          ) : (
+            <Link href="/coordinator" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <LogIn className="h-4 w-4 text-teal-600" /> Coordinator sign-in
+            </Link>
+          )}
           <a
             href="#rx-scanner"
             onClick={() => setMobileMenuOpen(false)}
