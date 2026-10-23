@@ -270,6 +270,7 @@ html[lang="sd"] body {
 
 [dir="rtl"] {
   letter-spacing: 0;
+  unicode-bidi: plaintext;
 }
 
 .voice-transcript {

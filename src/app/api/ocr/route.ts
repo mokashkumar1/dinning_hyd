@@ -1,5 +1,7 @@
 import { samplePrescriptions } from '@/lib/data/sampleScenarios';
 import type { PrescriptionScenario } from '@/types';
+import { allowApiRequest, detectUrdu, generateGemini, startGeminiValidation } from '@/lib/gemini';
+import { createHash } from 'node:crypto';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -69,10 +71,6 @@ function fallbackResponse(reason: 'missing-key' | 'capacity' | 'upstream') {
   });
 }
 
-function isGeminiCapacityError(status: number): boolean {
-  return status === 429 || status === 503;
-}
-
 function parseStructuredPrescription(text: string): PrescriptionScenario {
   try {
     return JSON.parse(text) as PrescriptionScenario;
@@ -104,6 +102,10 @@ function parseStructuredPrescription(text: string): PrescriptionScenario {
 }
 
 export async function POST(request: Request) {
+  startGeminiValidation();
+  if (!allowApiRequest(request, 'ocr', 8)) {
+    return fallbackResponse('capacity');
+  }
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -119,27 +121,21 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Image must be 10 MB or smaller.' }, { status: 413 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return fallbackResponse('missing-key');
-  }
-
   try {
     const base64Image = Buffer.from(await image.arrayBuffer()).toString('base64');
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // A slow upstream response should never leave the upload control spinning
-        // during a demonstration. The client receives the safe clinical preset instead.
-        signal: AbortSignal.timeout(30_000),
-        body: JSON.stringify({
+    const requestedLanguage = formData.get('language');
+    const urduMode = requestedLanguage === 'ur' || (typeof requestedLanguage === 'string' && detectUrdu(requestedLanguage));
+    const prompt = `${urduMode ? 'Respond ONLY in Urdu using proper Urdu Nastaliq-compatible script (اردو), not Roman Urdu and not Hindi/Devanagari. Use natural, correct grammar. Keep numbers, brand names and code in their original form. ' : ''}Transcribe this handwritten prescription. Return only the requested JSON. Keep rawHandwrittenSnippet as one compact line with semicolons, never line breaks or quotation marks. Include no more than three clearly readable medicines. Preserve uncertainty in warnings, do not invent medicines, and include a clear emergency-care warning when handwriting or dosage is unclear.`;
+    const { data: payload } = await generateGemini<{
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> }; finishReason?: string }>;
+    }>({
+      cacheKey: `ocr:${createHash('sha256').update(base64Image).update(image.type).update(String(requestedLanguage ?? '')).digest('hex')}`,
+      body: {
           contents: [{
             role: 'user',
             parts: [
               { inlineData: { mimeType: image.type, data: base64Image } },
-              { text: 'Transcribe this handwritten prescription. Return only the requested JSON. Keep rawHandwrittenSnippet as one compact line with semicolons, never line breaks or quotation marks. Include no more than three clearly readable medicines. Preserve uncertainty in warnings, do not invent medicines, and include a clear emergency-care warning when handwriting or dosage is unclear.' },
+              { text: prompt },
             ],
           }],
           generationConfig: {
@@ -152,23 +148,8 @@ export async function POST(request: Request) {
             maxOutputTokens: 4096,
             temperature: 0.1,
           },
-        }),
       },
-    );
-
-    if (!response.ok) {
-      if (isGeminiCapacityError(response.status)) {
-        return fallbackResponse('capacity');
-      }
-      return Response.json({ error: 'Prescription analysis is temporarily unavailable.' }, { status: 502 });
-    }
-
-    const payload = await response.json() as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-        finishReason?: string;
-      }>;
-    };
+    });
     const candidate = payload.candidates?.[0];
     const parts = candidate?.content?.parts ?? [];
     const text = parts.find((part) => !part.thought && part.text)?.text;
@@ -185,7 +166,6 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('Gemini prescription analysis failed:', error);
-    // Network and malformed-model-response failures are handled like an outage.
     return fallbackResponse('upstream');
   }
 }

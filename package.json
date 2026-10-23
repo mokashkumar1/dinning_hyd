@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "check-keys": "node --env-file=.env.local scripts/check-keys.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

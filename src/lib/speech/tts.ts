@@ -72,16 +72,18 @@ class TTSService {
       }
 
       if (lang === 'ur') {
-        return voiceLanguage.startsWith('ur') || voiceName.includes('urdu');
+        return voiceLanguage === 'ur-pk' || voiceName.includes('urdu') || voiceLanguage === 'ur-in' || voiceLanguage === 'hi-in';
       }
 
       return voiceLanguage.startsWith('en');
     });
 
-    if (lang === 'sd' && !voice) {
+    if ((lang === 'sd' || lang === 'ur') && !voice) {
       return {
         started: false,
-        error: 'A Sindhi voice is not installed in this browser. Install a Sindhi system voice, then try again.',
+        error: lang === 'ur'
+          ? 'No Urdu voice is installed in this browser. The Urdu text is still available to read.'
+          : 'A Sindhi voice is not installed in this browser. Install a Sindhi system voice, then try again.',
       };
     }
 

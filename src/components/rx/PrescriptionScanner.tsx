@@ -97,6 +97,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
     try {
       const formData = new FormData();
       formData.append('image', file);
+      formData.append('language', lang);
       const response = await fetch('/api/ocr', { method: 'POST', body: formData });
       const result = await response.json() as PrescriptionScenario | { error: string };
       if (!response.ok || 'error' in result) throw new Error('error' in result ? result.error : 'Unable to read this prescription.');
@@ -151,7 +152,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
     const speechText = buildSpokenScript(targetLang);
     setVoiceTranscript({ lang: targetLang, text: speechText });
 
-    if (targetLang === 'sd') {
+    if (targetLang !== 'en') {
       ttsService.stop();
       stopCloudAudio();
       const requestId = ++speechRequestRef.current;
@@ -195,10 +196,13 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
           }
         };
         await audio.play();
-      } catch (error) {
+      } catch {
         if (speechRequestRef.current === requestId) {
           setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
-          setVoiceError(error instanceof Error ? error.message : 'Spoken audio is temporarily unavailable. Please try again.');
+          const browserFallback = ttsService.speak(speechText, targetLang);
+          setVoiceError(browserFallback.error ?? (targetLang === 'ur'
+            ? 'Cloud audio is unavailable; using your browser Urdu voice.'
+            : 'Cloud audio is unavailable; using your browser voice.'));
         }
       }
       return;
