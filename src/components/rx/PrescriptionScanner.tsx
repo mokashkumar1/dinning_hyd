@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Upload, 
+  Camera,
   Volume2, 
   VolumeX, 
   CheckCircle2, 
@@ -41,6 +42,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   const [analysisSource, setAnalysisSource] = useState<'sample' | 'gemini' | 'fallback'>('sample');
   const [voiceTranscript, setVoiceTranscript] = useState<{ lang: Language; text: string } | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -86,6 +88,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
     } finally {
       setIsScanning(false);
       if (uploadInputRef.current) uploadInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   };
 
@@ -174,13 +177,34 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
           <input
             ref={uploadInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void handleImageScan(file);
             }}
           />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleImageScan(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isScanning}
+            className="min-h-[44px] rounded-lg bg-teal-700 px-3 text-xs font-bold text-white transition-colors hover:bg-teal-800 disabled:cursor-wait disabled:opacity-60 dark:bg-teal-600 dark:hover:bg-teal-500"
+            title="Open the rear camera on a phone, then analyse the photo"
+          >
+            <Camera className="mr-1.5 inline h-4 w-4" />
+            {isScanning ? 'Reading with AI…' : 'Use camera'}
+          </button>
           <button
             type="button"
             onClick={() => uploadInputRef.current?.click()}
