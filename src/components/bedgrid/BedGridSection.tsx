@@ -44,19 +44,25 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
   const [hospitals, setHospitals] = useState<HospitalBedData[]>(hyderabadHospitals);
   const [dataSource, setDataSource] = useState<'supabase' | 'local-fallback'>('local-fallback');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     const loadHospitals = async () => {
       try {
         const response = await fetch('/api/hospitals');
+        if (!response.ok) throw new Error('Hospital data is temporarily unavailable.');
         const payload = await response.json() as { hospitals?: HospitalBedData[]; source?: 'supabase' | 'local-fallback' };
         if (mounted && payload.hospitals?.length) {
           setHospitals(payload.hospitals);
           setDataSource(payload.source ?? 'local-fallback');
+          setDataNotice(payload.source === 'local-fallback' ? 'Showing local sample capacity until the live service is connected.' : null);
         }
       } catch {
-        // Static local data remains available if the backend is not configured yet.
+        if (mounted) setDataNotice('Live capacity could not be refreshed. Showing the last available information.');
+      } finally {
+        if (mounted) setIsLoading(false);
       }
     };
 
@@ -106,7 +112,7 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-slate-500">
             <strong className="text-slate-900 dark:text-white num">{hospitals.length} verified facilities</strong>
-            {dataSource === 'local-fallback' && <span className="ml-1 text-slate-400">· demo data</span>}
+            {isLoading ? <span className="ml-1 text-slate-400">· checking live data</span> : dataSource === 'local-fallback' && <span className="ml-1 text-amber-700 dark:text-amber-300">· sample data</span>}
           </span>
           <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-900" aria-label="Care availability view">
             <button
@@ -128,6 +134,13 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
           </div>
         </div>
       </div>
+
+      {dataNotice && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+          <AlertOctagon className="h-4 w-4 shrink-0" />
+          <span>{dataNotice}</span>
+        </div>
+      )}
 
       {/* Triage Search Bar & Natural Language Input */}
       <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm mb-6">
@@ -262,7 +275,7 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
                       {hospital.category}
                     </span>
                     <span className="text-[11px] text-slate-400">
-                      {hospital.reportedAgoMins} {t.verifiedMinsAgo}
+                      {hospital.reportedAgoMins > 120 ? 'Needs reconfirmation' : `${hospital.reportedAgoMins} ${t.verifiedMinsAgo}`}
                     </span>
                   </div>
 
