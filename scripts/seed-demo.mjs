@@ -7,7 +7,10 @@ if (!enabled) {
 }
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !serviceKey) throw new Error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before enabling demo mode.');
+if (!url || !serviceKey) {
+  console.warn('Demo seeding skipped because Supabase URL or service role key is not available in this environment.');
+  process.exit(0);
+}
 
 const supabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 const password = 'Demo@1234';
