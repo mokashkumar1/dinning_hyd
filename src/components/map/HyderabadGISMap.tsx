@@ -2,7 +2,7 @@
 
 import { divIcon } from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import { hyderabadHospitals } from '@/lib/data/hospitals';
+import { HospitalBedData } from '@/types';
 
 const HYDERABAD_CENTER: [number, number] = [25.3960, 68.3578];
 
@@ -17,7 +17,11 @@ function hospitalPin(availableIcu: number) {
   });
 }
 
-export function HyderabadGISMap() {
+interface HyderabadGISMapProps {
+  hospitals: HospitalBedData[];
+}
+
+export function HyderabadGISMap({ hospitals }: HyderabadGISMapProps) {
   return (
     <div className="h-[420px] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800" aria-label="Hyderabad hospital availability map">
       <MapContainer center={HYDERABAD_CENTER} zoom={12} scrollWheelZoom className="h-full w-full" aria-label="Hyderabad, Sindh hospital map">
@@ -25,7 +29,7 @@ export function HyderabadGISMap() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {hyderabadHospitals.map((hospital) => (
+        {hospitals.map((hospital) => (
           <Marker key={hospital.id} position={[hospital.coordinates.lat, hospital.coordinates.lng]} icon={hospitalPin(hospital.availableIcu)}>
             <Popup>
               <strong>{hospital.nameEn}</strong><br />
