@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Sun, 
-  Moon, 
-  FileText, 
-  Compass, 
+import Image from 'next/image';
+import {
+  Sun,
+  Moon,
+  FileText,
+  Compass,
   Menu,
   X,
-  Cross,
+  PhoneCall,
 } from 'lucide-react';
 import { Language } from '@/types';
 import { translations } from '@/lib/i18n/translations';
@@ -32,24 +33,31 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="shifa-header sticky top-0 z-40 w-full border-b backdrop-blur-xl transition-colors">
       <div className="max-w-7xl mx-auto flex h-[4.5rem] items-center justify-between gap-3 px-4 sm:px-6">
-        
+
         {/* Brand Logo & Title */}
         <div className="flex min-w-0 items-center gap-3">
-          <a href="#" className="group flex min-w-0 items-center gap-2.5" aria-label="ShifaAI home">
-            <div className="shifa-brand-mark shrink-0 transition-transform duration-200 group-hover:scale-105">
-              <Cross className="relative z-10 h-4 w-4 text-white" strokeWidth={3} />
+          <a href="#" className="group flex min-w-0 items-center gap-3" aria-label="ShifaAI home">
+            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-white p-1 shadow-sm border border-slate-200/90 transition-transform duration-200 group-hover:scale-105 dark:border-slate-700/80 dark:bg-white flex items-center justify-center">
+              <Image
+                src="/logo.png"
+                alt="ShifaAI Logo"
+                width={40}
+                height={40}
+                className="h-full w-full object-contain"
+                priority
+              />
             </div>
-            
+
             <div className="flex min-w-0 flex-col leading-none">
               <div className="flex items-center gap-1.5">
-                <span className="font-display text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                <span className="font-display text-xl font-black tracking-tight text-slate-900 dark:text-white">
                   ShifaAI
                 </span>
                 <span className="rounded-md bg-teal-100 px-1.5 py-1 text-[10px] font-bold leading-none text-teal-800 dark:bg-teal-950 dark:text-teal-300">
                   شفا
                 </span>
               </div>
-              <span className="mt-1 hidden text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 sm:inline">
+              <span className="mt-1 hidden text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 sm:inline">
                 Prescription & care guidance
               </span>
             </div>
@@ -76,7 +84,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Cluster */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          
+
+          {/* Emergency 1122 Direct Hotline */}
+          <a
+            href="tel:1122"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white px-3 py-1.5 text-xs font-bold transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+            aria-label="Call Emergency 1122"
+          >
+            <PhoneCall className="w-3.5 h-3.5 animate-pulse text-white" />
+            <span className="hidden sm:inline">Emergency</span>
+            <span className="num font-black">1122</span>
+          </a>
+
           {/* Trilingual Selector */}
           <div className="relative hidden items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs font-bold dark:border-slate-800 dark:bg-slate-900 lg:flex">
             <button
@@ -137,6 +156,13 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div id="mobile-navigation" className="flex flex-col gap-2 border-b border-slate-200 bg-white px-4 pt-2 pb-4 text-sm font-semibold dark:border-slate-800 dark:bg-slate-950 xl:hidden">
+          <a
+            href="tel:1122"
+            className="flex items-center justify-center gap-2 rounded-lg bg-rose-600 text-white py-2 px-3 text-xs font-bold shadow-sm"
+          >
+            <PhoneCall className="w-4 h-4 animate-pulse" />
+            <span>Direct Call Emergency 1122</span>
+          </a>
           <a
             href="#rx-scanner"
             onClick={() => setMobileMenuOpen(false)}

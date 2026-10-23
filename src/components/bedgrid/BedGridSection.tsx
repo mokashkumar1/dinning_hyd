@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { 
   Search, 
@@ -14,7 +14,12 @@ import {
   Clock, 
   Sparkles,
   List,
-  Map
+  Map,
+  AlertTriangle,
+  RefreshCw,
+  SearchX,
+  RotateCcw,
+  WifiOff
 } from 'lucide-react';
 import { Language, HospitalBedData } from '@/types';
 import { translations } from '@/lib/i18n/translations';
@@ -28,7 +33,7 @@ const HyderabadGISMap = dynamic(
   () => import('@/components/map/HyderabadGISMap').then((module) => module.HyderabadGISMap),
   {
     ssr: false,
-    loading: () => <div className="h-[420px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900" />,
+    loading: () => <div className="h-[440px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900" />,
   },
 );
 
@@ -45,38 +50,48 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
   const [dataSource, setDataSource] = useState<'supabase' | 'local-fallback'>('local-fallback');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isLoading, setIsLoading] = useState(true);
+  const [hasConnectionError, setHasConnectionError] = useState(false);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
+
+  const loadHospitals = useCallback(async () => {
+    setIsLoading(true);
+    setHasConnectionError(false);
+    try {
+      const response = await fetch('/api/hospitals');
+      if (!response.ok) throw new Error('Hospital data is temporarily unavailable.');
+      const payload = await response.json() as { hospitals?: HospitalBedData[]; source?: 'supabase' | 'local-fallback' };
+      if (payload.hospitals?.length) {
+        setHospitals(payload.hospitals);
+        setDataSource(payload.source ?? 'local-fallback');
+        setDataNotice(payload.source === 'local-fallback' ? t.sampleCapacityNotice : null);
+      }
+    } catch {
+      setHasConnectionError(true);
+      setDataNotice(t.lastAvailableNotice);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t.sampleCapacityNotice, t.lastAvailableNotice]);
 
   useEffect(() => {
     let mounted = true;
-    const loadHospitals = async () => {
-      try {
-        const response = await fetch('/api/hospitals');
-        if (!response.ok) throw new Error('Hospital data is temporarily unavailable.');
-        const payload = await response.json() as { hospitals?: HospitalBedData[]; source?: 'supabase' | 'local-fallback' };
-        if (mounted && payload.hospitals?.length) {
-          setHospitals(payload.hospitals);
-          setDataSource(payload.source ?? 'local-fallback');
-          setDataNotice(payload.source === 'local-fallback' ? 'Showing local sample capacity until the live service is connected.' : null);
-        }
-      } catch {
-        if (mounted) setDataNotice('Live capacity could not be refreshed. Showing the last available information.');
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    };
+    const initialLoadTimer = window.setTimeout(() => {
+      void loadHospitals();
+    }, 0);
 
-    void loadHospitals();
     const supabase = createClient();
     const channel = supabase.channel('hospital-capacity-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'hospitals' }, () => { void loadHospitals(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hospitals' }, () => {
+        if (mounted) void loadHospitals();
+      })
       .subscribe();
 
     return () => {
       mounted = false;
+      window.clearTimeout(initialLoadTimer);
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadHospitals]);
 
   // Quick triage symptom prompts
   const samplePrompts = [
@@ -111,15 +126,19 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
 
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-slate-500">
-            <strong className="text-slate-900 dark:text-white num">{hospitals.length} verified facilities</strong>
-            {isLoading ? <span className="ml-1 text-slate-400">· checking live data</span> : dataSource === 'local-fallback' && <span className="ml-1 text-amber-700 dark:text-amber-300">· sample data</span>}
+            <strong className="text-slate-900 dark:text-white num">{hospitals.length} facilities</strong>
+            {isLoading ? (
+              <span className="ml-1 text-teal-600 dark:text-teal-400">· {t.checkingLiveData}</span>
+            ) : dataSource === 'local-fallback' ? (
+              <span className="ml-1 text-amber-700 dark:text-amber-300">· sample data</span>
+            ) : null}
           </span>
           <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-900" aria-label="Care availability view">
             <button
               type="button"
               onClick={() => setViewMode('list')}
               aria-pressed={viewMode === 'list'}
-              className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[11px] font-bold transition-colors ${viewMode === 'list' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+              className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-bold transition-colors ${viewMode === 'list' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
             >
               <List className="h-3.5 w-3.5" /> List
             </button>
@@ -127,7 +146,7 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
               type="button"
               onClick={() => setViewMode('map')}
               aria-pressed={viewMode === 'map'}
-              className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[11px] font-bold transition-colors ${viewMode === 'map' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
+              className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2.5 text-[11px] font-bold transition-colors ${viewMode === 'map' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
             >
               <Map className="h-3.5 w-3.5" /> Map
             </button>
@@ -135,10 +154,41 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
         </div>
       </div>
 
-      {dataNotice && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
-          <AlertOctagon className="h-4 w-4 shrink-0" />
-          <span>{dataNotice}</span>
+      {/* Live Data Connection Error Alert with Retry Action */}
+      {hasConnectionError && (
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 text-xs text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <div className="flex items-center gap-2">
+            <WifiOff className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+            <span>{t.connectionError} {dataNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadHospitals()}
+            disabled={isLoading}
+            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>{t.retryConnection}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Fallback Sample Data Informational Notice */}
+      {!hasConnectionError && dataNotice && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>{dataNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadHospitals()}
+            disabled={isLoading}
+            className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>{t.retryConnection}</span>
+          </button>
         </div>
       )}
 
@@ -245,12 +295,69 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
       {viewMode === 'map' ? (
         <div className="mb-6">
           <HyderabadGISMap hospitals={rankedHospitals} />
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Pins reflect the same filtered facilities shown in the list.</p>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Color-coded ICU capacity pins for the same filtered facilities shown in the list.</p>
+        </div>
+      ) : isLoading && hospitals.length === 0 ? (
+        /* Loading Skeleton State */
+        <div className="space-y-4" aria-label="Loading hospital data">
+          {[1, 2, 3].map((skeletonIdx) => (
+            <div
+              key={skeletonIdx}
+              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 animate-pulse"
+            >
+              <div className="flex flex-col lg:flex-row justify-between gap-4">
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                    <div className="h-4 w-28 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                  </div>
+                  <div className="h-6 w-3/5 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+                  <div className="h-4 w-2/5 bg-slate-200 dark:bg-slate-800 rounded" />
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                    <div className="h-14 bg-slate-100 dark:bg-slate-800/60 rounded-lg" />
+                    <div className="h-14 bg-slate-100 dark:bg-slate-800/60 rounded-lg" />
+                    <div className="h-14 bg-slate-100 dark:bg-slate-800/60 rounded-lg" />
+                    <div className="h-14 bg-slate-100 dark:bg-slate-800/60 rounded-lg" />
+                  </div>
+                </div>
+                <div className="lg:w-48 space-y-2">
+                  <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                  <div className="h-10 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : rankedHospitals.length === 0 ? (
+        /* Empty State */
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-10 text-center my-4">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+            <SearchX className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+            {t.noMatchingHospitals}
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-5 leading-relaxed">
+            {t.noMatchingHospitalsDesc}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setActiveFilter('all');
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-teal-700 dark:hover:bg-slate-100 transition-colors shadow-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{t.clearFilters}</span>
+          </button>
         </div>
       ) : (
       <div className="space-y-4">
         {rankedHospitals.map((hospital, index) => {
           const isTopRanked = index === 0;
+          const isNeedsConfirmation = hospital.reportedAgoMins > 60;
+
           return (
             <div
               key={hospital.id}
@@ -266,7 +373,7 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {isTopRanked && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-600 text-white flex items-center gap-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-600 text-white flex items-center gap-1 shadow-xs">
                         <Sparkles className="w-3 h-3" />
                         #1 Best Match
                       </span>
@@ -274,9 +381,22 @@ export const BedGridSection: React.FC<BedGridSectionProps> = ({ lang }) => {
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {hospital.category}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      {hospital.reportedAgoMins > 120 ? 'Needs reconfirmation' : `${hospital.reportedAgoMins} ${t.verifiedMinsAgo}`}
-                    </span>
+
+                    {/* Freshness Badge */}
+                    {isNeedsConfirmation ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800/80">
+                        <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span>{t.dataNeedsConfirmation}</span>
+                        <span className="opacity-75 num text-[9px]">
+                          ({hospital.reportedAgoMins > 60 ? `${Math.floor(hospital.reportedAgoMins / 60)}h ago` : `${hospital.reportedAgoMins}m`})
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="num">{t.updatedAgo} {hospital.reportedAgoMins} {t.minAgo}</span>
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">

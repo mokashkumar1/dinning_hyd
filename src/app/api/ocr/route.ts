@@ -145,7 +145,12 @@ export async function POST(request: Request) {
           generationConfig: {
             responseMimeType: 'application/json',
             responseJsonSchema: prescriptionJsonSchema,
-            maxOutputTokens: 2400,
+            // Flash's default dynamic thinking budget counts against maxOutputTokens.
+            // OCR is an extraction task, so reserving the full response budget for the
+            // schema prevents handwritten prescriptions from being cut off mid-JSON.
+            thinkingConfig: { thinkingBudget: 0 },
+            maxOutputTokens: 4096,
+            temperature: 0.1,
           },
         }),
       },
