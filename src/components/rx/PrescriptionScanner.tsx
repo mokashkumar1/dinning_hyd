@@ -42,18 +42,40 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   const [analysisSource, setAnalysisSource] = useState<'sample' | 'gemini' | 'fallback'>('sample');
   const [voiceTranscript, setVoiceTranscript] = useState<{ lang: Language; text: string } | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [cloudAudioState, setCloudAudioState] = useState({ isPlaying: false, isLoading: false, activeLanguage: null as Language | null });
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const cloudAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRequestRef = useRef(0);
+
+  const stopCloudAudio = () => {
+    speechRequestRef.current += 1;
+    const audio = cloudAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+      cloudAudioRef.current = null;
+    }
+    setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
+  };
+
+  const stopAllAudio = () => {
+    ttsService.stop();
+    stopCloudAudio();
+  };
 
   // Subscribe to TTS state
   useEffect(() => {
     const unsub = ttsService.subscribe(setTtsState);
-    return () => unsub();
+    return () => {
+      unsub();
+      stopCloudAudio();
+    };
   }, []);
 
   // Handle Scenario Selection with simulated scanner radar
   const handleSelectScenario = (scenario: PrescriptionScenario) => {
-    ttsService.stop();
+    stopAllAudio();
     setVoiceTranscript(null);
     setVoiceError(null);
     setIsScanning(true);
@@ -68,7 +90,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   const handleImageScan = async (file: File) => {
     setIsScanning(true);
     setScanMessage(null);
-    ttsService.stop();
+    stopAllAudio();
     setVoiceTranscript(null);
     setVoiceError(null);
 
@@ -117,17 +139,79 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   };
 
   // Voice playback trigger
-  const handlePlayVoice = (targetLang: Language) => {
-    if (ttsState.isPlaying && ttsState.activeLanguage === targetLang) {
-      ttsService.stop();
+  const handlePlayVoice = async (targetLang: Language) => {
+    if (
+      (ttsState.isPlaying && ttsState.activeLanguage === targetLang) ||
+      ((cloudAudioState.isPlaying || cloudAudioState.isLoading) && cloudAudioState.activeLanguage === targetLang)
+    ) {
+      stopAllAudio();
       return;
     }
 
     const speechText = buildSpokenScript(targetLang);
     setVoiceTranscript({ lang: targetLang, text: speechText });
+
+    if (targetLang === 'sd') {
+      ttsService.stop();
+      stopCloudAudio();
+      const requestId = ++speechRequestRef.current;
+      setVoiceError(null);
+      setCloudAudioState({ isPlaying: false, isLoading: true, activeLanguage: targetLang });
+
+      try {
+        const response = await fetch('/api/speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: speechText, lang: targetLang }),
+        });
+        const contentType = response.headers.get('Content-Type') ?? '';
+        const error = contentType.includes('application/json')
+          ? (await response.json() as { error?: string }).error
+          : undefined;
+        if (!response.ok) throw new Error(error ?? 'Spoken audio is temporarily unavailable. Please try again.');
+
+        const audioUrl = URL.createObjectURL(await response.blob());
+        if (speechRequestRef.current !== requestId) {
+          URL.revokeObjectURL(audioUrl);
+          return;
+        }
+
+        const audio = new Audio(audioUrl);
+        cloudAudioRef.current = audio;
+        audio.onplay = () => setCloudAudioState({ isPlaying: true, isLoading: false, activeLanguage: targetLang });
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (cloudAudioRef.current === audio) {
+            cloudAudioRef.current = null;
+            setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
+          }
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (cloudAudioRef.current === audio) {
+            cloudAudioRef.current = null;
+            setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
+            setVoiceError('Audio could not play in this browser. Please try again.');
+          }
+        };
+        await audio.play();
+      } catch (error) {
+        if (speechRequestRef.current === requestId) {
+          setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
+          setVoiceError(error instanceof Error ? error.message : 'Spoken audio is temporarily unavailable. Please try again.');
+        }
+      }
+      return;
+    }
+
+    stopCloudAudio();
     const result = ttsService.speak(speechText, targetLang);
     setVoiceError(result.error ?? null);
   };
+
+  const isAudioPlaying = ttsState.isPlaying || cloudAudioState.isPlaying;
+  const isAudioLoading = cloudAudioState.isLoading;
+  const activeAudioLanguage = ttsState.activeLanguage ?? cloudAudioState.activeLanguage;
 
   // Toggle medicine taken status
   const toggleMedicineTaken = (id: string) => {
@@ -434,10 +518,10 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
               </div>
 
               {/* Animated Waveform if playing */}
-              {ttsState.isPlaying && (
+              {(isAudioPlaying || isAudioLoading) && (
                 <div className="flex items-center gap-1 h-7 px-3 rounded-lg bg-teal-100 dark:bg-teal-950">
                   <span className="text-[10px] font-bold text-teal-800 dark:text-teal-300 mr-1.5 uppercase">
-                    Playing
+                    {isAudioLoading ? 'Preparing' : 'Playing'}
                   </span>
                   <span className="w-1 bg-teal-600 dark:bg-teal-400 rounded-full wave-bar" />
                   <span className="w-1 bg-teal-600 dark:bg-teal-400 rounded-full wave-bar" />
@@ -452,7 +536,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
               <button
                 onClick={() => handlePlayVoice('ur')}
-                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${ttsState.isPlaying && ttsState.activeLanguage === 'ur'
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${isAudioPlaying && activeAudioLanguage === 'ur'
                     ? 'bg-teal-600 text-white border-teal-600 shadow-md scale-95'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-teal-500'
                   }`}
@@ -463,7 +547,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
 
               <button
                 onClick={() => handlePlayVoice('sd')}
-                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${ttsState.isPlaying && ttsState.activeLanguage === 'sd'
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${(isAudioPlaying || isAudioLoading) && activeAudioLanguage === 'sd'
                     ? 'bg-teal-600 text-white border-teal-600 shadow-md scale-95'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-teal-500'
                   }`}
@@ -474,7 +558,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
 
               <button
                 onClick={() => handlePlayVoice('en')}
-                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${ttsState.isPlaying && ttsState.activeLanguage === 'en'
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${isAudioPlaying && activeAudioLanguage === 'en'
                     ? 'bg-teal-600 text-white border-teal-600 shadow-md scale-95'
                     : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-teal-500'
                   }`}
@@ -484,9 +568,9 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
               </button>
             </div>
 
-            {ttsState.isPlaying && (
+            {(isAudioPlaying || isAudioLoading) && (
               <button
-                onClick={() => ttsService.stop()}
+                onClick={stopAllAudio}
                 className="mt-3 text-xs text-rose-600 dark:text-rose-400 font-semibold hover:underline flex items-center gap-1"
               >
                 <VolumeX className="w-3.5 h-3.5" />
