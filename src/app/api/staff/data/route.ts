@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient, getStaffSession } from '@/lib/staff/auth';
+import { getAdminClient, getStaffSession, isDemoMode } from '@/lib/staff/auth';
+
+const demoCases = [
+  { id: 'demo-case-1', reference: 'SHIFA-8F2A1C', patient_name: 'Patient A · 62', condition: 'Acute chest pain · suspected STEMI', priority: 'Critical', status: 'dispatched', facility: 'Civil Hospital Hyderabad' },
+  { id: 'demo-case-2', reference: 'SHIFA-49B0E3', patient_name: 'Patient B · 28', condition: 'Road traffic injury · leg trauma', priority: 'Urgent', status: 'in_care', facility: 'Liaquat University Hospital' },
+  { id: 'demo-case-3', reference: 'SHIFA-72C9D0', patient_name: 'Patient C · 45', condition: 'Breathing difficulty · oxygen support', priority: 'Urgent', status: 'new', facility: 'Civil Hospital Hyderabad' },
+];
 
 export async function GET() {
   const { user, role } = await getStaffSession();
@@ -15,7 +21,11 @@ export async function GET() {
     const visibleCases = role === 'staff' ? (cases.data ?? []).filter((item) => item.assigned_to === user.id) : cases.data ?? [];
     return NextResponse.json({ cases: visibleCases, users: users?.data.users.map((person) => ({ id: person.id, email: person.email, name: person.user_metadata?.full_name ?? person.email, role: person.app_metadata.role ?? 'pending', requestedRole: person.user_metadata?.requested_role })) ?? [] });
   } catch {
-    return NextResponse.json({ error: 'Staff workspace is not configured. Apply the staff migration and set the Supabase service role key.' }, { status: 503 });
+    if (!isDemoMode()) return NextResponse.json({ error: 'Staff workspace is not configured. Apply the staff migration and set the Supabase service role key.' }, { status: 503 });
+    const admin = getAdminClient();
+    const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
+    const visibleCases = demoCases.map((item) => ({ ...item, assigned_to: role === 'staff' ? user.id : null }));
+    return NextResponse.json({ cases: visibleCases, users: (data?.users ?? []).map((person) => ({ id: person.id, email: person.email, name: person.user_metadata?.full_name ?? person.email, role: person.app_metadata.role ?? 'pending', requestedRole: person.user_metadata?.requested_role })), demoFallback: true });
   }
 }
 
@@ -48,6 +58,9 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ error: 'You are not authorized to perform this action.' }, { status: 403 });
   } catch {
+    if (isDemoMode() && ((body?.action === 'case-status' && ['admin', 'coordinator', 'staff'].includes(role)) || (body?.action === 'assign-case' && ['admin', 'coordinator'].includes(role)))) {
+      return NextResponse.json({ ok: true, demoFallback: true });
+    }
     return NextResponse.json({ error: 'Unable to update staff workspace.' }, { status: 503 });
   }
 }

@@ -39,6 +39,12 @@ const demoCases = [
 ];
 for (const item of demoCases) {
   const { error } = await supabase.from('emergency_cases').upsert(item, { onConflict: 'reference' });
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST205') {
+      console.warn('Demo accounts are ready. Emergency case samples will use the app fallback until the staff access migration is applied.');
+      break;
+    }
+    throw error;
+  }
 }
-console.log('Demo emergency cases are ready.');
+console.log('Demo emergency case setup is complete.');
