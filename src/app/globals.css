@@ -1,26 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:opsz,wght@6..12,400..800&family=Noto+Naskh+Arabic:wght@400;600;700&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Theme is controlled by the in-app switch, never by the operating system. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Clinical Cool Mist Base (from DESIGN_SYSTEM.md & BedGrid) */
+    --bg: 243 246 247;          /* #F3F6F7 */
+    --card: 255 255 255;        /* #FFFFFF */
+    --sunken: 235 240 242;      /* #EBF0F2 */
+    --fg: 13 27 36;             /* #0D1B24 - Deep clinical slate */
+    --sub: 82 100 113;          /* #526471 - Subdued metadata */
+    --line: 214 223 228;        /* #D6DFE4 - Hairline grid line */
+    --brand: 16 40 59;          /* #10283B - Deep navy primary */
+    --brand-fg: 255 255 255;    /* #FFFFFF */
+    --accent: 8 112 124;        /* #08707C - Deep medical teal */
+    --tactical: 196 241 53;     /* #C4F135 - High-vis electric lime (Website A) */
+    --tactical-fg: 22 24 29;    /* #16181D - Dark ink on lime */
+    --ok: 14 124 82;            /* #0E7C52 - Available capacity green */
+    --warn: 138 80 0;           /* #8A5000 - Low stock / caution amber */
+    --bad: 190 24 42;           /* #BE182A - Emergency 1122 red */
+    --info: 36 96 168;          /* #2460A8 - Clinical info blue */
+    --solid-fg: 255 255 255;
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Night ICU / Emergency Triage Dark Mode (from BedGrid) */
+    --bg: 8 15 21;              /* #080F15 - Deep night triage canvas */
+    --card: 14 25 34;           /* #0E1922 - Elevated dark container */
+    --sunken: 19 33 44;         /* #13212C - Recessed slot */
+    --fg: 229 238 243;          /* #E5EEF3 - Crisp luminescent text */
+    --sub: 134 157 170;         /* #869DAA - Secondary text */
+    --line: 33 51 64;           /* #213340 - Dark hairline border */
+    --brand: 229 238 243;       /* #E5EEF3 - Inverted primary brand */
+    --brand-fg: 8 15 21;        /* #080F15 - Primary brand dark text */
+    --accent: 56 207 214;       /* #38CFD6 - Luminous cyan accent */
+    --tactical: 196 241 53;     /* #C4F135 - High-vis electric lime */
+    --tactical-fg: 8 15 21;
+    --ok: 52 211 153;           /* #34D399 - Luminous emerald green */
+    --warn: 251 191 36;         /* #FBBF24 - Luminous amber */
+    --bad: 251 113 133;         /* #FB7185 - Luminous coral red */
+    --info: 96 165 250;         /* #60A5FA - Luminous sky blue */
+    --solid-fg: 8 15 21;
+    color-scheme: dark;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--fg));
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.shifa-header {
+  background: color-mix(in srgb, rgb(var(--card)) 88%, transparent);
+  border-color: rgb(var(--line) / 0.9);
+  box-shadow: 0 10px 30px -24px rgba(13, 27, 36, 0.45);
+}
+
+.shifa-brand-mark {
+  position: relative;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, #10283b, #08707c);
+  box-shadow: 0 8px 18px -10px rgba(8, 112, 124, 0.9);
+}
+
+.shifa-brand-mark::before,
+.shifa-brand-mark::after {
+  position: absolute;
+  content: '';
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.shifa-brand-mark::before { width: 1.5rem; height: 1px; }
+.shifa-brand-mark::after { width: 1px; height: 1.5rem; }
+
+.shifa-nav-link {
+  color: rgb(var(--sub));
+  border: 1px solid transparent;
+}
+
+.shifa-nav-link:hover {
+  color: rgb(var(--fg));
+  background: rgb(var(--sunken));
+  border-color: rgb(var(--line));
+}
+
+.shifa-emergency-link {
+  background: linear-gradient(135deg, #be182a, #e63b4f);
+  box-shadow: 0 10px 22px -13px rgba(190, 24, 42, 0.9);
+}
+
+.shifa-hero {
+  background-image:
+    radial-gradient(50rem 24rem at 90% 0%, rgb(var(--accent) / 0.16), transparent 68%),
+    radial-gradient(28rem 20rem at 2% 82%, rgb(var(--tactical) / 0.13), transparent 70%),
+    linear-gradient(135deg, rgb(var(--bg)), rgb(var(--bg)) 60%, rgb(var(--sunken)));
+}
+
+.command-card {
+  background: linear-gradient(145deg, rgb(var(--card)), rgb(var(--sunken) / 0.82));
+  box-shadow: 0 24px 52px -34px rgba(13, 27, 36, 0.48);
+}
+
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.7);
+}
+
+.hospital-map-pin {
+  background: transparent;
+  border: 0;
+}
+
+h1, h2, h3, .font-display {
+  font-family: 'Bricolage Grotesque', 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.hero-title {
+  font-family: 'Bricolage Grotesque', 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(2.35rem, 5vw, 3.75rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+/* Enforce tabular numerics across all counters & live metrics to eliminate CLS */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Tactical action button: only ONE primary action per screen */
+.btn-tactical {
+  background-color: rgb(var(--tactical));
+  color: rgb(var(--tactical-fg));
+  font-weight: 700;
+  border-radius: 8px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.625rem 1.25rem;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.btn-tactical:hover {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+}
+.btn-tactical:active {
+  transform: scale(0.98);
+}
+
+/* Emergency button */
+.btn-emergency {
+  background-color: rgb(var(--bad));
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 8px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  transition: all 0.15s ease;
+}
+.btn-emergency:hover {
+  filter: brightness(1.1);
+}
+
+/* Hero background with subtle ambient radial glow and micro-grid */
+.hero-bg {
+  background-image:
+    radial-gradient(70% 60% at 85% -10%, rgb(var(--accent) / 0.12), transparent 70%),
+    radial-gradient(rgb(var(--line)) 1px, transparent 1.4px);
+  background-size: auto, 24px 24px;
+}
+
+/* Card hover lift effect */
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgb(var(--accent) / 0.4);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.12);
+}
+
+/* Radar Scan Line Animation for OCR */
+@keyframes scan-radar {
+  0% { top: 0%; opacity: 0.9; }
+  50% { opacity: 1; }
+  100% { top: 96%; opacity: 0.9; }
+}
+
+.scanner-radar-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgb(var(--accent)), rgb(var(--tactical)), transparent);
+  box-shadow: 0 0 16px rgb(var(--accent));
+  animation: scan-radar 2.4s ease-in-out infinite alternate;
+}
+
+/* Infinite Marquee Animation for Emergency Ticker */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 38s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Tabular audio waveform visualizer bars */
+@keyframes wave-bounce {
+  0%, 100% { height: 6px; }
+  50% { height: 26px; }
+}
+
+.wave-bar {
+  animation: wave-bounce 1.2s ease-in-out infinite;
+}
+.wave-bar:nth-child(2) { animation-delay: 0.2s; }
+.wave-bar:nth-child(3) { animation-delay: 0.4s; }
+.wave-bar:nth-child(4) { animation-delay: 0.1s; }
+.wave-bar:nth-child(5) { animation-delay: 0.3s; }
+
+/* Pulsing live dot */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+/* RTL Language Enhancements */
+[dir="rtl"] {
+  font-family: 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif;
+  letter-spacing: 0;
+}
+
+[dir="rtl"] .icon-flip {
+  transform: scaleX(-1);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--sub) / 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--sub) / 0.6);
 }

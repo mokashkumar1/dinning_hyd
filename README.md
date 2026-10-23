@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ShifaAI
 
-## Getting Started
+ShifaAI turns handwritten prescriptions into clear medication guidance and helps people compare available care options by capacity, specialty, and travel time.
 
-First, run the development server:
+## What is working
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Prescription image upload through `POST /api/ocr` using Gemini 2.5 Flash.
+- Safe prescription fallback when Gemini is not configured or unavailable.
+- Hospital data loaded from Supabase through `GET /api/hospitals`, with local sample data as a development fallback.
+- Supabase Realtime listener for hospital capacity changes.
+- Coordinator-only referral holds through `POST /api/referral-holds`.
+- Light/dark mode and English, Urdu, and Sindhi support.
+
+## Local setup
+
+Copy `.env.example` to `.env.local` if it does not already exist, then fill in only these values:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+GEMINI_API_KEY=your-gemini-api-key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`GEMINI_API_KEY` is server-only. Never rename it to `NEXT_PUBLIC_GEMINI_API_KEY` and never commit `.env.local`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+No WhatsApp token, WhatsApp database, Google Maps key, or service-role key is required for the current app.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Supabase activation
 
-## Learn More
+1. Open the Supabase SQL Editor for your project.
+2. Run `supabase/migrations/20261023_init_bedgrid.sql`.
+3. Insert or import hospital records into the `hospitals` table. Until then, the app transparently uses its local sample records.
+4. For anyone allowed to create a bed hold, create an Auth user and set this protected app metadata in the Supabase dashboard or admin workflow:
 
-To learn more about Next.js, take a look at the following resources:
+```json
+{ "role": "coordinator" }
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The role must be in `app_metadata`, not `user_metadata`. The public browser never receives a service-role key.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Run locally
 
-## Deploy on Vercel
+```bash
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Then open [http://localhost:3000](http://localhost:3000).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Verify
+
+```bash
+npm run build
+npm run lint
+```
