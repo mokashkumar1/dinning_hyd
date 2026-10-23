@@ -7,11 +7,17 @@ export interface TTSState {
   currentText: string | null;
 }
 
+export interface TTSResult {
+  started: boolean;
+  error?: string;
+}
+
 type StateListener = (state: TTSState) => void;
 
 class TTSService {
   private synth: SpeechSynthesis | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private playbackId = 0;
   private listeners: Set<StateListener> = new Set();
   private state: TTSState = {
     isPlaying: false,
@@ -36,6 +42,7 @@ class TTSService {
   }
 
   public stop() {
+    this.playbackId += 1;
     if (this.synth) {
       this.synth.cancel();
     }
@@ -47,16 +54,40 @@ class TTSService {
     this.notify();
   }
 
-  public speak(text: string, lang: Language) {
+  public speak(text: string, lang: Language): TTSResult {
     if (!this.synth) {
       console.warn('Speech synthesis not supported in this environment');
-      return;
+      return { started: false, error: 'Audio playback is not supported in this browser.' };
     }
 
     this.stop();
 
+    const voices = this.synth.getVoices();
+    const voice = voices.find((candidate) => {
+      const voiceLanguage = candidate.lang.toLowerCase();
+      const voiceName = candidate.name.toLowerCase();
+
+      if (lang === 'sd') {
+        return voiceLanguage.startsWith('sd') || voiceName.includes('sindhi');
+      }
+
+      if (lang === 'ur') {
+        return voiceLanguage.startsWith('ur') || voiceName.includes('urdu');
+      }
+
+      return voiceLanguage.startsWith('en');
+    });
+
+    if (lang === 'sd' && !voice) {
+      return {
+        started: false,
+        error: 'A Sindhi voice is not installed in this browser. Install a Sindhi system voice, then try again.',
+      };
+    }
+
     const utterance = new SpeechSynthesisUtterance(text);
     this.currentUtterance = utterance;
+    const activePlaybackId = ++this.playbackId;
 
     // Select suitable voice or language tag
     if (lang === 'ur') {
@@ -64,8 +95,7 @@ class TTSService {
       utterance.rate = 0.88; // Slightly slower for elderly comprehension
       utterance.pitch = 1.0;
     } else if (lang === 'sd') {
-      // Browsers often fall back to ur-PK or ar-SA if sd-PK voice is not present
-      utterance.lang = 'ur-PK'; 
+      utterance.lang = 'sd-PK';
       utterance.rate = 0.85;
       utterance.pitch = 0.98;
     } else {
@@ -74,20 +104,12 @@ class TTSService {
       utterance.pitch = 1.0;
     }
 
-    // Try finding matching voice
-    const voices = this.synth.getVoices();
-    if (voices && voices.length > 0) {
-      const match = voices.find(v => 
-        (lang === 'ur' && (v.lang.startsWith('ur') || v.name.toLowerCase().includes('urdu'))) ||
-        (lang === 'sd' && (v.lang.startsWith('sd') || v.lang.startsWith('ur') || v.name.toLowerCase().includes('urdu'))) ||
-        (lang === 'en' && v.lang.startsWith('en'))
-      );
-      if (match) {
-        utterance.voice = match;
-      }
+    if (voice) {
+      utterance.voice = voice;
     }
 
     utterance.onstart = () => {
+      if (activePlaybackId !== this.playbackId) return;
       this.state = {
         isPlaying: true,
         activeLanguage: lang,
@@ -97,6 +119,7 @@ class TTSService {
     };
 
     utterance.onend = () => {
+      if (activePlaybackId !== this.playbackId) return;
       this.state = {
         isPlaying: false,
         activeLanguage: null,
@@ -106,6 +129,7 @@ class TTSService {
     };
 
     utterance.onerror = () => {
+      if (activePlaybackId !== this.playbackId) return;
       this.state = {
         isPlaying: false,
         activeLanguage: null,
@@ -115,6 +139,7 @@ class TTSService {
     };
 
     this.synth.speak(utterance);
+    return { started: true };
   }
 
   public getState(): TTSState {
