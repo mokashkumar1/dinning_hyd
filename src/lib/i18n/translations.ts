@@ -16,6 +16,15 @@ export const translations = {
     langSelect: 'Language',
     rolePatient: 'Patient / Family',
     roleCoordinator: 'ER Coordinator',
+    staffSignIn: 'Staff Sign In',
+    staffAccessTitle: 'Staff access',
+    staffAccessSubtitle: 'For authorised emergency-care staff only.',
+    signIn: 'Sign in',
+    signUp: 'Sign up',
+    staffDemoAccess: 'Demo access for judges',
+    staffRole: 'Staff',
+    coordinatorRole: 'Coordinator',
+    adminRole: 'Admin',
 
     // Hero Section
     heroBadge: 'Prescription clarity · Care navigation',
@@ -136,6 +145,15 @@ export const translations = {
     langSelect: 'زبان',
     rolePatient: 'مریض / فیملی',
     roleCoordinator: 'ایمرجنسی کوآرڈینیٹر',
+    staffSignIn: 'عملے کا سائن اِن',
+    staffAccessTitle: 'عملے کی رسائی',
+    staffAccessSubtitle: 'صرف مجاز ہنگامی طبی عملے کے لیے۔',
+    signIn: 'سائن اِن',
+    signUp: 'سائن اَپ',
+    staffDemoAccess: 'ججز کے لیے ڈیمو رسائی',
+    staffRole: 'عملہ',
+    coordinatorRole: 'کوآرڈینیٹر',
+    adminRole: 'ایڈمن',
 
     // Hero Section
     heroBadge: 'نسخہ سمجھیں · مناسب نگہداشت تلاش کریں',
@@ -272,6 +290,15 @@ export const translations = {
     langSelect: 'ٻولي',
     rolePatient: 'مريض / خاندان',
     roleCoordinator: 'ايمرجنسي عملدار',
+    staffSignIn: 'اسٽاف سائن اِن',
+    staffAccessTitle: 'اسٽاف رسائي',
+    staffAccessSubtitle: 'صرف بااختيار ايمرجنسي سنڀال عملي لاءِ.',
+    signIn: 'سائن اِن',
+    signUp: 'سائن اَپ',
+    staffDemoAccess: 'ججن لاءِ ڊيمو رسائي',
+    staffRole: 'اسٽاف',
+    coordinatorRole: 'ڪوآرڊينيٽر',
+    adminRole: 'ايڊمن',
 
     // Hero Section
     heroBadge: 'نسخو سمجھو · صحيح سنڀال ڳوليو',

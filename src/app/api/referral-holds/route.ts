@@ -16,8 +16,8 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return Response.json({ error: 'Coordinator sign-in is required.' }, { status: 401 });
-  if (user.app_metadata.role !== 'coordinator') {
-    return Response.json({ error: 'Only coordinator accounts can create a referral hold.' }, { status: 403 });
+  if (!['admin', 'coordinator'].includes(user.app_metadata.role)) {
+    return Response.json({ error: 'An Admin or Coordinator account is required to create a referral hold.' }, { status: 403 });
   }
 
   const totalHoldSeconds = 45 * 60;
