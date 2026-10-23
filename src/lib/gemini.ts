@@ -40,7 +40,9 @@ function nextUtcDay() { const date = new Date(); date.setUTCHours(24, 0, 0, 0); 
 
 function classifyFailure(status: number | undefined, body: string): 'retry' | 'cooldown' | 'daily-quota' | 'disable' | 'other' {
   const text = body.toLowerCase();
-  if (status === 400 || status === 401 || status === 403) return 'disable';
+  // A bad request can be caused by a model or payload mismatch. Only disable a
+  // key when Gemini explicitly identifies the credential as invalid.
+  if (status === 401 || status === 403 || (status === 400 && /api key.*(invalid|not valid)|invalid api key|key.*not valid/.test(text))) return 'disable';
   if (status === 429 && /(daily|per day|quota)/.test(text)) return 'daily-quota';
   if (status === 429 || status === 503 || /resource_exhausted|unavailable|timeout|timed out/.test(text)) return 'cooldown';
   if (!status || status >= 500) return 'retry';

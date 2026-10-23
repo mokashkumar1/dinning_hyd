@@ -4,12 +4,20 @@ import { createHash } from 'node:crypto';
 
 const MAX_SCRIPT_LENGTH = 6_000;
 const SUPPORTED_LANGUAGES = new Set<Language>(['en', 'ur', 'sd']);
+// Gemini 3.8 is the currently reliable REST TTS option for Urdu and Sindhi.
+// Main text/OCR generation remains Gemini 2.5 Flash in the central gateway.
+const DEFAULT_TTS_MODELS = ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts'];
 type SpeechRequest = { text?: unknown; lang?: unknown };
 type GeminiSpeechResponse = { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }> };
 
 function cleanSpeechText(text: string): string {
   return text.replace(/```[\s\S]*?```/g, ' ').replace(/[*_~`>#\[\]()]/g, ' ')
     .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/\s+/g, ' ').trim();
+}
+
+function ttsModels(): string[] {
+  const configured = (process.env.GEMINI_TTS_MODELS ?? '').split(',').map((model) => model.trim()).filter(Boolean);
+  return configured.length ? [...new Set(configured)] : DEFAULT_TTS_MODELS;
 }
 
 export async function POST(request: Request) {
@@ -28,12 +36,12 @@ export async function POST(request: Request) {
     : body.lang === 'sd' ? 'Speak naturally in Sindhi for Pakistan, clearly and slowly.' : 'Speak in clear, calm English at a reassuring pace.';
   try {
     const { data: payload } = await generateGemini<GeminiSpeechResponse>({
-      models: ['gemini-2.5-flash-preview-tts'],
+      models: ttsModels(),
       cacheKey: `speech:${createHash('sha256').update(`${body.lang}:${text}`).digest('hex')}`,
       cacheTtlMs: 10 * 60_000,
       body: {
         contents: [{ role: 'user', parts: [{ text, speech_metadata: { style: `${languageInstruction} Read the supplied transcript verbatim; do not add commentary.` } }] }],
-        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
+        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { voice: 'Kore' } } },
       },
     });
     const audio = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
