@@ -46,6 +46,8 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const cloudAudioRef = useRef<HTMLAudioElement | null>(null);
+  const cloudAudioUrlRef = useRef<string | null>(null);
+  const cloudAudioCacheRef = useRef(new Map<string, Blob>());
   const speechRequestRef = useRef(0);
 
   const stopCloudAudio = () => {
@@ -55,6 +57,10 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
       audio.pause();
       audio.src = '';
       cloudAudioRef.current = null;
+    }
+    if (cloudAudioUrlRef.current) {
+      URL.revokeObjectURL(cloudAudioUrlRef.current);
+      cloudAudioUrlRef.current = null;
     }
     setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
   };
@@ -156,22 +162,29 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
       ttsService.stop();
       stopCloudAudio();
       const requestId = ++speechRequestRef.current;
+      const cacheKey = `${targetLang}:${speechText}`;
       setVoiceError(null);
       setCloudAudioState({ isPlaying: false, isLoading: true, activeLanguage: targetLang });
 
       try {
-        const response = await fetch('/api/speech', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: speechText, lang: targetLang }),
-        });
-        const contentType = response.headers.get('Content-Type') ?? '';
-        const error = contentType.includes('application/json')
-          ? (await response.json() as { error?: string }).error
-          : undefined;
-        if (!response.ok) throw new Error(error ?? 'Spoken audio is temporarily unavailable. Please try again.');
+        let audioBlob = cloudAudioCacheRef.current.get(cacheKey);
+        if (!audioBlob) {
+          const response = await fetch('/api/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: speechText, lang: targetLang }),
+          });
+          const contentType = response.headers.get('Content-Type') ?? '';
+          const error = contentType.includes('application/json')
+            ? (await response.json() as { error?: string }).error
+            : undefined;
+          if (!response.ok) throw new Error(error ?? 'Spoken audio is temporarily unavailable. Please try again.');
+          audioBlob = await response.blob();
+          if (cloudAudioCacheRef.current.size >= 12) cloudAudioCacheRef.current.delete(cloudAudioCacheRef.current.keys().next().value as string);
+          cloudAudioCacheRef.current.set(cacheKey, audioBlob);
+        }
 
-        const audioUrl = URL.createObjectURL(await response.blob());
+        const audioUrl = URL.createObjectURL(audioBlob);
         if (speechRequestRef.current !== requestId) {
           URL.revokeObjectURL(audioUrl);
           return;
@@ -179,11 +192,13 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
 
         const audio = new Audio(audioUrl);
         cloudAudioRef.current = audio;
+        cloudAudioUrlRef.current = audioUrl;
         audio.onplay = () => setCloudAudioState({ isPlaying: true, isLoading: false, activeLanguage: targetLang });
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
           if (cloudAudioRef.current === audio) {
             cloudAudioRef.current = null;
+            cloudAudioUrlRef.current = null;
             setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
           }
         };
@@ -191,6 +206,7 @@ export const PrescriptionScanner: React.FC<PrescriptionScannerProps> = ({ lang }
           URL.revokeObjectURL(audioUrl);
           if (cloudAudioRef.current === audio) {
             cloudAudioRef.current = null;
+            cloudAudioUrlRef.current = null;
             setCloudAudioState({ isPlaying: false, isLoading: false, activeLanguage: null });
             setVoiceError('Audio could not play in this browser. Please try again.');
           }

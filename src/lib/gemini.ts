@@ -111,6 +111,9 @@ async function executeRequest<T>(request: GeminiRequest): Promise<GatewayResult<
   let lastError: GeminiRequestError | undefined;
   for (const model of (request.models?.length ? request.models : configuredModels())) {
     for (const key of keys) {
+      // A prior model may already have put this key in cooldown. Do not retry it
+      // with the next fallback model, especially after a daily TTS quota error.
+      if (key.state === 'disabled' || (key.cooldownUntil && key.cooldownUntil > Date.now())) continue;
       try {
         const data = await callGemini(model, key, request.body) as T;
         activeModel = model;

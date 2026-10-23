@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ShifaAI (شفا) | Prescription Reader & Care Finder",
   description: "Understand handwritten prescriptions and compare available care options with clear, multilingual guidance.",
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
