@@ -125,12 +125,15 @@ export const Header: React.FC<HeaderProps> = ({
           </a>
 
           {isCoordinator ? (
-            <button onClick={() => void signOut()} className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-teal-300 px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/40 md:inline-flex" aria-label="Sign out coordinator">
-              <ShieldCheck className="h-3.5 w-3.5" /> Coordinator <LogOut className="h-3.5 w-3.5" />
+            <button onClick={() => void signOut()} className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-900/50 md:inline-flex shadow-xs" aria-label="Sign out staff">
+              <ShieldCheck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Staff Portal</span>
+              <LogOut className="h-3.5 w-3.5 opacity-70 ml-0.5" />
             </button>
           ) : (
-            <Link href="/coordinator" className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 md:inline-flex">
-              <LogIn className="h-3.5 w-3.5" /> Coordinator
+            <Link href="/coordinator" className="hidden min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800 md:inline-flex shadow-xs transition-colors">
+              <ShieldCheck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Staff Sign In</span>
             </Link>
           )}
 
@@ -203,11 +206,11 @@ export const Header: React.FC<HeaderProps> = ({
           </a>
           {isCoordinator ? (
             <button onClick={() => void signOut()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30">
-              <LogOut className="h-4 w-4" /> Sign out coordinator
+              <LogOut className="h-4 w-4" /> Sign out staff
             </button>
           ) : (
-            <Link href="/coordinator" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">
-              <LogIn className="h-4 w-4 text-teal-600" /> Coordinator sign-in
+            <Link href="/coordinator" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-teal-700 dark:text-teal-300">
+              <ShieldCheck className="h-4 w-4 text-teal-600 dark:text-teal-400" /> Staff Sign In / ER Portal
             </Link>
           )}
           <a
